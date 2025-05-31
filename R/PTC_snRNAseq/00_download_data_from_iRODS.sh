@@ -37,7 +37,7 @@ samples=(
 '/seq/illumina/runs/48/48853/cellranger/cellranger710_count_48853_CG_SB_NB14664110_GRCh38-2020-A'
 )
 
-outDir=~/0_Projects_git_repo/FetalThyroidAtlas/Data/thyroid_10X/
+outDir=Data/thyroid_10X/
 mkdir -p $outDir
 
 for irod_path in ${samples[@]}; do

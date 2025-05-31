@@ -1,7 +1,8 @@
 ##--- Preprocess the 10X single-nuclei paediatric thyroid cancer dataset ---##
 
 
-outDir = "/nfs/team274/mt22/Thyroid/Results_2505/PTC_scRNAseq/02_pThyCancer_snPreprocessing"
+#outDir = "/nfs/team274/mt22/Thyroid/Results_2505/PTC_scRNAseq/02_pThyCancer_snPreprocessing"
+outDir = "Results/2505/PTC_scRNAseq/02_pThyCancer_snPreprocessing"
 if(!dir.exists(outDir)){
   dir.create(outDir,recursive = T)
 }
