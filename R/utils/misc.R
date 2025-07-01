@@ -126,7 +126,44 @@ theme_classic_2 = theme_classic(base_size = 15) + theme(panel.border = element_r
 
 
 
-
+#' Save raster and non-raster versions of plots
+#'
+#' Saves a pdf and png version of everything.
+#'
+#' @param baseName Name of file to save.  File name without extension.
+#' @param plotFun Function to generate the plot.  Must take two arguments, noFrame and noPlot which control if the plot part / frame part are drawn.
+#' @param width Width in inches.
+#' @param heights Height in inches.
+#' @param res Resolution in pixels per inch for rasterised image.
+#' @param rawData If provided, save the raw data used to make the plot.
+#' @param row.names Passed to write.table
+#' @param col.names Passed to write.table
+#' @param ... Passed to plotFun
+saveFig = function(baseName,plotFun,width=4,height=3,res=300,rawData=NULL,row.names=FALSE,col.names=TRUE,...){
+  #Save the base versions
+  pdf(paste0(baseName,'.pdf'),width=width,height=height,useDingbats=FALSE)
+  plotFun(noFrame=FALSE,noPlot=FALSE,...)
+  dev.off()
+  png(paste0(baseName,'.png'),width=width,height=height,res=300,units='in')
+  plotFun(...)
+  dev.off()
+  #And the various bits of frame in vector format
+  pdf(paste0(baseName,'_frame.pdf'),width=width,height=height,useDingbats=FALSE)
+  plotFun(noPlot=TRUE,noFrame=FALSE,...)
+  dev.off()
+  #And the various bits of the actual plot in raster format
+  png(paste0(baseName,'_plot.png'),width=width,height=height,res=300,units='in')
+  plotFun(noPlot=FALSE,noFrame=TRUE,...)
+  dev.off()
+  #Save raw data if provided
+  if(!is.null(rawData)){
+    write.table(rawData,paste0(baseName,'_rawData.tsv'),
+                quote=FALSE,
+                sep='\t',
+                row.names=row.names,
+                col.names=col.names)
+  }
+}
 
 
 

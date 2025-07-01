@@ -58,13 +58,6 @@ if('Pu21' %in% names(datasets_fp)){
   aThy_Pu21 = standard_clustering(aThy_Pu21)
   aThy_Pu21$celltype[aThy_Pu21$celltype == 'thy_Lumen-forming'] = 'fTFC2'
   aThy_Pu21$annot = as.character(aThy_Pu21$celltype)
-  
-  aThy_Pu21$cell_barcode = gsub('.*_','',aThy_Pu21$cellID)
-  # Use Hassan's annotation
-  pu21_annot = read.csv('/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Pu_2021/Pu_2021_obs.csv.gz')
-  table(aThy_Pu21$cell_barcode %in% pu21_annot$cell_id)
-  table(pu21_annot$cell_id %in% aThy_Pu21$cell_barcode)
-  
   aThy_Pu21$dataset = 'aThy_Pu21'
   sratObj_list[['aThy_Pu21']] = aThy_Pu21
 }
@@ -163,6 +156,7 @@ if(!file.exists(fThy_fp)){
 }
 
 fThy$finalAnn = fThy[[annot_column]]
+fThy$cellID = colnames(fThy)
 fThy = subset(fThy,subset = cellID %in% fThy$cellID[!fThy$celltype %in% c('thy_Cycling')])
 fThy$finalAnn[fThy$celltype == 'thy_TH_processing'] = 'fTFC1'
 fThy$finalAnn[fThy$celltype == 'thy_Lumen-forming'] = 'fTFC2'
@@ -174,6 +168,8 @@ if(with_SCPs){
   fAdr@meta.data$cellID = rownames(fAdr@meta.data)
   # Subset to just SCPs
   fAdr = subset(fAdr,Annotation == 'SCPs')
+  fAdr$annot = fAdr$Annotation
+  fAdr$finalAnn = fAdr$Annotation
   
   ## Combine to create REF.srat
   REF.srat = merge_seurat_objects(fThy,fAdr,keepAllGenes = F,genomeVersions = c('v38','v38'))
@@ -246,7 +242,7 @@ plot_prefix = NULL
 
 outputs = runLR(REF.srat,ref_annot=ref_annot,srat=tgt.srat,LR_level=LR_level,srat_annot=srat_annot,
                 model_fp = model_fp,outDir=outDir,plot_prefix=plot_prefix,out_prefix=out_prefix,
-                minGeneMatch=minGeneMatch,maxCells = maxCells,tissue=tissue,skipIfExists = skipIfExists,
+                minGeneMatch=minGeneMatch,maxCells = maxCells,tissue=tissue,skipIfExists = F,
                 scLR_TGTtype='',scLR_REFtype='',alpha=alpha)
 
 message(sprintf('LR completed for tissue %s',tissue))
@@ -269,7 +265,7 @@ message(sprintf('LR completed for tissue %s',tissue))
 outDir = file.path(main_outDir,sprintf("LRv1_fThy.REF_aThy.tgt_alpha.%s_maxCell.%dk_%s",alpha,maxCells/1000,geneFilter))
 model_fp = file.path(outDir,sprintf('LRv1_fThy.REF_trainModel_alpha.%s_maxCell.%dk_%s.RDS',alpha,maxCells/1000,geneFilter))
 
-model_fp = '~/lustre_mt22/Thyroid/Results_v3/03_fThy_in_normalAdultThy/LRv1_fThy.REF_aThy.tgt_alpha.0.1_maxCell.4k_minGeneFilter/LRv1_fThy.REF_trainModel_alpha.0.1_maxCell.4k_minGeneFilter.RDS'
+#model_fp = '~/lustre_mt22/Thyroid/Results_v3/03_fThy_in_normalAdultThy/LRv1_fThy.REF_aThy.tgt_alpha.0.1_maxCell.4k_minGeneFilter/LRv1_fThy.REF_trainModel_alpha.0.1_maxCell.4k_minGeneFilter.RDS'
 model = readRDS(model_fp)
 
 ## Predict similarity across all adult datasets
@@ -279,6 +275,7 @@ logit_mtx = lapply(1:length(sratObj_list),function(i){
   return(mtx)})
 names(logit_mtx) = names(sratObj_list)
 logit_mtx = do.call(rbind,logit_mtx)
+colnames(logit_mtx)
 
 ## Subset for just TFC1/2 reference
 tfc_mtx = logit_mtx[,c('fTFC1','fTFC2','SCPs')]
@@ -315,14 +312,24 @@ for(i in 1:length(sratObj_list)){
 }
 
 names(thyrocytesObj_list) = names(sratObj_list)
-DimPlot(thyrocytesObj_list[[2]],group.by = 'annot',cols = col25,label = T,repel = T,label.box = T)
-DimPlot(thyrocytesObj_list[[5]],group.by = 'sample.ID',cols = col25,label = T,repel = T,label.box = T)
+DimPlot(thyrocytesObj_list[[5]],group.by = 'annot',cols = col25,label = T,repel = T,label.box = T)
+DimPlot(thyrocytesObj_list[[4]],group.by = 'seurat_clusters',cols = col25,label = T,repel = T,label.box = T)
+DimPlot(thyrocytesObj_list[[4]],cells.highlight = thyrocytesObj_list[[4]]$cellID[thyrocytesObj_list[[4]]$seurat_clusters %in% c(6,13,9,8,12)])
 
+# Pu21: remove clustes 6,13,9,8,12 - as these look like immune / thyrocytes doublets
+clusters_toKeep = unique(thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]]$seurat_clusters)
+clusters_toKeep = clusters_toKeep[!clusters_toKeep %in% c(6,13,9,8,12)]
+thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]] = subset(thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]],subset=seurat_clusters %in% clusters_toKeep)
+thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]] = standard_clustering(thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]],runHarmony = T,harmonyVar = 'orig.ident')
 
-# Wang23: cluster 3 expresses PLVAP / CA4 which are endothelial markers --> remove these cells
-thyrocytesObj_list[[names(thyrocytesObj_list) == 'aThy_Wang22']] = subset(thyrocytesObj_list[[names(thyrocytesObj_list) == 'aThy_Wang22']],subset = seurat_clusters != 3)
-thyrocytesObj_list[[names(thyrocytesObj_list) == 'aThy_Wang22']] = standard_clustering(thyrocytesObj_list[[names(thyrocytesObj_list) == 'aThy_Wang22']])
+# Lu23: regenerate UMAP with less tight clustering
+s = thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Lu23')]]
+DimPlot(s,group.by = 'seurat_clusters',cols=col25,label = T,label.box = T)
+s = FindClusters(s, resolution = 0.2, reduction = "harmony")
+s = RunUMAP(s, dims=1:20, reduction ="harmony",min.dist=0.45)
+m = quickMarkers(s@assays$RNA@counts,s$seurat_clusters)
 
+thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Lu23')]] = s
 
 saveRDS(thyrocytesObj_list,file.path(main_outDir,'published_aThyrocytesOnly_5datasets.RDS'))
 thyrocytesObj_list = readRDS(file.path(main_outDir,'published_aThyrocytesOnly_5datasets.RDS'))
@@ -331,6 +338,7 @@ thyrocytesObj_list = readRDS(file.path(main_outDir,'published_aThyrocytesOnly_5d
 ##-------------------------------##
 ##       Generating plots      ####
 ##-------------------------------##
+source('R/utils/misc.R')
 
 data_toPlot = do.call(rbind,lapply(1:length(thyrocytesObj_list),function(i){
   tmp = cbind(thyrocytesObj_list[[i]]@meta.data[,c('cellID','annot','LRv1_fThyfull_fTFC1','LRv1_fThyfull_fTFC2','LRv1_fThyfull_diff','dataset')],
@@ -374,6 +382,7 @@ plotFun_aThy_LRv1.fThy_frac.Cell = function(noFrame=FALSE,noPlot=FALSE){
     theme(#panel.border = element_rect(fill = F,colour = 'black',linewidth = 1),
       axis.line = element_blank(),
       strip.background = element_blank(),
+      axis.text = element_text(colour='black'),
       axis.ticks = element_blank())+xlab('') + ylab('')
   
   print(p1)
@@ -498,23 +507,24 @@ saveFig(file.path(plotDir,'Fig2_aThy_LRv1.fThy_DotPlot_hor_big'),plotFun_dotPlot
 
 ## Plot expression of PAX8 / GLIS3 in adult thyrocytes
 library(SoupX)
-thyrocytesObj_list = readRDS('~/lustre_mt22/Thyroid/Data/published_scRNAseq/published_aThyrocytesOnly.RDS')
-aThy_Wang22 = thyrocytesObj_list[['aThy_Wang22']]
-aThy_Mosteiro23 = thyrocytesObj_list[['aThy_Mosteiro23']]
+thyrocytesObj_list = readRDS(file.path(main_outDir,'published_aThyrocytesOnly_5datasets.RDS'))
 
-data_toPlot = rbind(do.call(cbind,list(aThy_Mosteiro23@meta.data[,c('cellID','dataset','annot','cell_assignment')],
-                                       aThy_Mosteiro23@reductions$umap@cell.embeddings,
-                                       t(as.matrix(aThy_Mosteiro23@assays$RNA@data[c('PAX8','GLIS3'),])))),
-                    do.call(cbind,list(aThy_Wang22@meta.data[,c('cellID','dataset','annot','cell_assignment')],
-                                       aThy_Wang22@reductions$umap@cell.embeddings,
-                                       t(as.matrix(aThy_Wang22@assays$RNA@data[c('PAX8','GLIS3'),]))))
-                    )
+
+data_toPlot = do.call(rbind,lapply(1:length(thyrocytesObj_list),function(i){
+  s = thyrocytesObj_list[[i]]
+  df = do.call(cbind,list(s@meta.data[,c('cellID','dataset','annot','cell_assignment')],
+            s@reductions$umap@cell.embeddings,
+            t(as.matrix(s@assays$RNA@data[c('PAX8','GLIS3'),]))))
+  return(df)
+}))
+
+
 dd = data_toPlot[data_toPlot$dataset == 'aThy_Mosteiro23',]
 plotFun_aThy_UMAP_LRv1.fThy_markerExpr_Mosteiro23 = function(noFrame=FALSE,noPlot=FALSE){
   par(mar=c(0.1,0.1,1,0.1))
   p1 = ggplot(dd,aes(UMAP_1,UMAP_2,col=PAX8))+
     geom_point(size=0.1,alpha=0.9) + 
-    facet_wrap(vars(dataset),scales = 'free')+
+    facet_wrap(vars(dataset),scales = 'free',nrow=1)+
     #scale_color_gradient2(low='#64b9c6',mid='white',high='#356f87')+
     #scale_color_gradientn(colours = c(grey(0.8),'#7ec0ee','#2e4472'))+
     scale_color_gradientn(colours = c(grey(0.85),'#85bfb2','#102E52'))+
@@ -534,7 +544,7 @@ plotFun_aThy_UMAP_LRv1.fThy_markerExpr_Mosteiro23 = function(noFrame=FALSE,noPlo
                dd[dd$PAX8 == min(dd$PAX8),][1:50,])
     p1 = ggplot(dd,aes(UMAP_1,UMAP_2,col=PAX8))+
       geom_point(size=0.1,alpha=0.9) + 
-      facet_wrap(vars(dataset),scales = 'free')+
+      facet_wrap(vars(dataset),scales = 'free',nrow=1)+
       scale_color_gradientn(colours = c(grey(0.85),'#85bfb2','#102E52'))+
       theme_classic() + 
       theme(#panel.border = element_rect(fill = F,colour = 'black',linewidth = 1),
@@ -551,12 +561,12 @@ saveFig(file.path(plotDir,'FigXX_aThy_UMAP_LRv1.fThy_PAX8expr_Mosteiro23'),plotF
 
 
 
-dd = data_toPlot[data_toPlot$dataset == 'aThy_Wang22',]
-plotFun_aThy_UMAP_LRv1.fThy_markerExpr_Wang23 = function(noFrame=FALSE,noPlot=FALSE){
+dd = data_toPlot
+plotFun_aThy_UMAP_LRv1.fThy_markerExpr_all = function(noFrame=FALSE,noPlot=FALSE){
   par(mar=c(0.1,0.1,1,0.1))
   p1 = ggplot(dd,aes(UMAP_1,UMAP_2,col=PAX8))+
     geom_point(size=0.1,alpha=0.9) + 
-    facet_wrap(vars(dataset),scales = 'free')+
+    facet_wrap(vars(dataset),scales = 'free',nrow=1)+
     #scale_color_gradient2(low='#64b9c6',mid='white',high='#356f87')+
     #scale_color_gradientn(colours = c(grey(0.8),'#7ec0ee','#2e4472'))+
     scale_color_gradientn(colours = c(grey(0.85),'#85bfb2','#102E52'))+
@@ -576,7 +586,7 @@ plotFun_aThy_UMAP_LRv1.fThy_markerExpr_Wang23 = function(noFrame=FALSE,noPlot=FA
                dd[dd$PAX8 == min(dd$PAX8),][1:50,])
     p1 = ggplot(dd,aes(UMAP_1,UMAP_2,col=PAX8))+
       geom_point(size=0.1,alpha=0.9) + 
-      facet_wrap(vars(dataset),scales = 'free')+
+      facet_wrap(vars(dataset),scales = 'free',nrow=1)+
       scale_color_gradientn(colours = c(grey(0.85),'#85bfb2','#102E52'))+
       theme_classic() + 
       theme(#panel.border = element_rect(fill = F,colour = 'black',linewidth = 1),
@@ -589,10 +599,10 @@ plotFun_aThy_UMAP_LRv1.fThy_markerExpr_Wang23 = function(noFrame=FALSE,noPlot=FA
   print(p1)
 }
 
-saveFig(file.path(plotDir,'FigXX_aThy_UMAP_LRv1.fThy_PAX8expr_Wang23'),plotFun_aThy_UMAP_LRv1.fThy_markerExpr_Wang23,rawData=dd,width = 3.7,height = 3,res = 500)  
+saveFig(file.path(plotDir,'FigXX_aThy_UMAP_LRv1.fThy_PAX8expr_5datasets'),plotFun_aThy_UMAP_LRv1.fThy_markerExpr_all,rawData=dd,width = 15,height = 3,res = 500)  
 
 
-p2 = ggplot(data_toPlot[data_toPlot$dataset == 'aThy_Wang22',],aes(UMAP_1,UMAP_2,col=(PAX8)))+
+p2 = ggplot(data_toPlot[data_toPlot$dataset == 'aThy_Wang22',],aes(UMAP_1,UMAP_2,col=PAX8))+
   geom_point(size=0.3,alpha=0.9) + 
   #geom_point(data = data_toPlot[data_toPlot$cell_assignment %in% c('TFC2','ambiguous'),],size=0.1,alpha=0.9) + 
   facet_wrap(vars(dataset),scales = 'free')+

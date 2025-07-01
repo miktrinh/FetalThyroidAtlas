@@ -3,12 +3,15 @@
 ##    2. Harmony to integrator Tumour and normal biopsies
 
 
-outDir = "Results/2505/PTC_scRNAseq/03_pThyCancer_annotation"
+setwd('~/FetalThyroidAtlas/')
+
+
+outDir = "Results/2505/PTC_snRNAseq/03_pThyCancer_annotation"
 if(!dir.exists(outDir)){
   dir.create(outDir,recursive = T)
 }
 
-#setwd(outDir)
+
 
 
 ##----------------##
@@ -19,6 +22,7 @@ library(tidyverse)
 source("R/utils/logisticRegression.R")
 source("R/utils/runLR.R")
 source("R/utils/sc_utils.R")
+source("R/utils/misc.R")
 
 
 
@@ -30,7 +34,7 @@ numPCs = 75
 geneFilter = c('minGeneFilter','maxGeneFilter')
 annot_column = c('celltype','cluster')
 
-geneFilter = 'minGeneFilter'
+geneFilter = 'maxGeneFilter'
 annot_column = 'cluster'
 
 
@@ -48,8 +52,8 @@ message('1. REF.srat loaded')
 
 
 ##---- Import tgt dataset ------##
-tgt.srat.fp = 'Results/2505/PTC_scRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_2505_HARM.RDS'
-#'Results/2505/PTC_scRNAseq/02_pThyCancer_snPreprocessing/may25/scCancerThyroid_10X_rhoLimNone__clean_noMTCells.RDS'
+tgt.srat.fp = 'Results/2505/PTC_snRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_2505_HARM.RDS'
+#'Results/2505/PTC_snRNAseq/02_pThyCancer_snPreprocessing/may25/scCancerThyroid_10X_rhoLimNone__clean_noMTCells.RDS'
 
 if(file.exists(tgt.srat.fp)){
   tgt.srat = readRDS(tgt.srat.fp)
@@ -59,7 +63,7 @@ if(file.exists(tgt.srat.fp)){
   
   print(table(tgt.srat$donor))
 }else{
-  tgt.srat = readRDS('Results/2505/PTC_scRNAseq/02_pThyCancer_snPreprocessing/may25/scCancerThyroid_10X_rhoLimNone__clean_noMTCells.RDS')
+  tgt.srat = readRDS('Results/2505/PTC_snRNAseq/02_pThyCancer_snPreprocessing/may25/scCancerThyroid_10X_rhoLimNone__clean_noMTCells.RDS')
   
   ##----   Add metadata to the object   -----##
   tgt.srat$cellID = rownames(tgt.srat@meta.data)
@@ -107,10 +111,10 @@ if(file.exists(tgt.srat.fp)){
   
   
   tgt.srat.harm = standard_clustering(tgt.srat,runHarmony = T,harmonyVar = c('donor'))
-  saveRDS(tgt.srat.harm,'Results/2505/PTC_scRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_2505_HARM.RDS')
+  saveRDS(tgt.srat.harm,'Results/2505/PTC_snRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_2505_HARM.RDS')
   
   tgt.srat = standard_clustering(tgt.srat)
-  saveRDS(tgt.srat,'Results/2505/PTC_scRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_2505.RDS')
+  saveRDS(tgt.srat,'Results/2505/PTC_snRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_2505.RDS')
 }
 
 
@@ -139,13 +143,13 @@ genesToKeep = names(genesToKeep)
 genesToKeep = genesToKeep[!grepl('^MT-|^RPL|^RPS|^MALAT1$|^NEAT1$|^AC\\d+|^AL\\d+',genesToKeep)]
 
 if(geneFilter == 'maxGeneFilter'){
-  # Remove soupy genes
-  soupyGenes = read.csv('~/lustre_mt22/Thyroid/Results/5_LR_fThyREF_on_pThy/fThy2nREF_downsampled_Thyrocytes_markersExprinpThy.csv')
-  soupyGenes = soupyGenes$gene[soupyGenes$frac_cellExpr >= 0.7]
+  # # Remove soupy genes
+  # soupyGenes = read.csv('~/lustre_mt22/Thyroid/Results/5_LR_fThyREF_on_pThy/fThy2nREF_downsampled_Thyrocytes_markersExprinpThy.csv')
+  # soupyGenes = soupyGenes$gene[soupyGenes$frac_cellExpr >= 0.7]
 
   thy_prog = c('PAX8','NKX2-1','FOXE1','HHEX','UROD','DIO2','DUOX1','DUOX2','DUOXA1','DUOXA2',
                'SLC5A5','ANO1','SLC26A4','TPO','IYD','TG','PAX8','GLIS3','TSHR','SLC16A2','SLC16A10','EXOC4','ELMO1','VPS13C','STON2','SPG11')
-  genesToKeep = genesToKeep[!genesToKeep %in% c(soupyGenes,thy_prog)]
+  genesToKeep = genesToKeep[!genesToKeep %in% c(thy_prog)]
 }
 
 
@@ -188,166 +192,168 @@ message(sprintf('3. LR completed for tissue %s',tissue))
 
 
 
-# ##---------------------------------##
-# ##   Do some LR_similarity plots   ##
-# ##---------------------------------##
-# model_fp = paste0('~/lustre_mt22/Thyroid/Results_v2/03_pThyCancer_annotation/LRv1_fThy2n.REF/fThy2n.REF.',annot_column,'_trainModel_',geneFilter,'_4kmaxcells_70perc_240403.RDS')
-# outputs = readRDS(file.path(paste0("~/lustre_mt22/Thyroid/Results_v2/03_pThyCancer_annotation/LRv1_fThy2n.REF/LRv1_fThy2n.REF.",annot_column,"_pPTC.tgt_",geneFilter),
-#                             paste0('fThy2n.REF.',annot_column,'_on_pThy.tgt_maxCells_70perc_240511_raw_LR_outputs.RDS')))
-# 
-# ## annotated Cluster level #
-# if(length(outputs) >2){
-#   output = outputs[[1]]
-# }else{
-#   output = outputs[[2]][[1]]
-# }
-# 
-# type = ifelse(grepl('ref_',rownames(output)),'REF','TGT')
-# show_row_names = T
-# column_order = colnames(output)[order(colnames(output))]
-# row_order = rownames(output)[!grepl('Tumour',rownames(output))]
-# row_order = row_order[order(row_order)]
-# row_order = c(row_order,rownames(output)[grepl('Tumour',rownames(output))])
-# 
-# 
-# #plot_prefix = 'fThy2n.REF.celltype_on_pThy.tgt_maxCells_70perc_240511_'
-# plot_prefix = paste0('fThy2n.REF.',annot_column,'_on_pThy.tgt_maxCells_70perc_240511_')
-# 
-# pdf(file.path(outDir,paste0(plot_prefix,'clusterLR.pdf')),width = 12,height = 15)
-# 
-# hm = similarityHeatmap(output,
-#                        row_order=row_order,
-#                        column_order = column_order,
-#                        row_title_rot = 0,
-#                        row_title_gp = gpar(fontsize=10),row_names_gp = gpar(fontsize=10),row_names_max_width = unit(6,'cm'),
-#                        column_names_gp = gpar(fontsize=10),column_names_max_height = unit(6,'cm'),
-#                        split = type, gap = unit(2,'mm'), show_row_names = show_row_names, cluster_rows = F)
-# draw(hm)
-# dev.off()
-# 
-# 
-# ## annotated Single-cell level #
-# if(length(outputs) > 2){
-#   output = outputs[['scLR_all']]
-# }else{
-#   output = outputs[[2]][['scLR_all']]
-# }
-# 
-# #tgt.srat$annot = tgt.srat$finalAnn
-# #tgt.srat$annot2 = ifelse(tgt.srat$etiology == 'left_inferior_tumour',paste0('tum_',tgt.srat$annot),tgt.srat$annot)
-# 
-# in_mtx = output
-# type = paste0(#tgt.srat.harm$donor[match(rownames(output),tgt.srat.harm$cellID)],':',
-#               tgt.srat.harm$etiology[match(rownames(output),tgt.srat.harm$cellID)],':',
-#               as.character(tgt.srat.harm$seurat_clusters[match(rownames(output),tgt.srat.harm$cellID)]))
-#   # ifelse(as.character(tgt.srat$etiology[match(rownames(output),tgt.srat$cellID)]) == 'left_inferior_tumour',
-#   #             paste0('tum_',as.character(tgt.srat$seurat_clusters[match(rownames(output),tgt.srat$cellID)])),
-#   #             paste0('norm_',as.character(tgt.srat$seurat_clusters[match(rownames(output),tgt.srat$cellID)])))
-# type[is.na(type)] = paste0('ref_',as.character(REF.srat$annot[match(rownames(output)[is.na(type)],paste0('ref_',REF.srat$cellID))]))
-# type[type == 'NA:NA:NA'] = paste0('ref_',as.character(REF.srat$annot[match(rownames(output)[type == 'NA:NA:NA'],paste0('ref_',REF.srat$cellID))]))
-# type[type == 'NA:NA'] = paste0('ref_',as.character(REF.srat$annot[match(rownames(output)[type == 'NA:NA'],paste0('ref_',REF.srat$cellID))]))
-# #type = factor(type, levels = )
-# 
-# pdf(file.path(outDir,paste0(plot_prefix,'scLR_all.pdf')),width = 10,height = 50)
-# 
-# show_row_names=F
-# hm = similarityHeatmap(in_mtx,
-#                        column_order = colnames(output)[order(colnames(output))],
-#                        row_title_rot = 0,
-#                        row_title_gp = gpar(fontsize=5),#row_names_gp = gpar(fontsize=5),row_names_max_width = unit(6,'cm'),
-#                        column_names_gp = gpar(fontsize=10),column_names_max_height = unit(6,'cm'),
-#                        split = type, gap = unit(2,'mm'), show_row_names = show_row_names, cluster_rows = F)
-# draw(hm)
-# 
-# dev.off()
-# 
-# 
-# 
-# 
-# ##----- Add annotation    ------####
-# DimPlot(tgt.srat.harm,group.by = 'section',label = T,repel = T,label.box = T) + NoLegend()
-# ## For every tumour cell, assign it to the reference cell type of best match....
-# mtx = outputs[['scLR_tgt']]
-# mtx = mtx[,!is.na(colSums(mtx))]
-# bestMatch = do.call(c,lapply(1:nrow(mtx),function(i){
-#   n = colnames(mtx)[which(mtx[i,] == max(mtx[i,]))]
-#   if(length(n) > 1){
-#     n = paste(n,collapse = ':')
-#   }
-#   return(n)
-# }))
-# names(bestMatch) = rownames(mtx)
-# 
-# table(tgt.srat$cellID %in% rownames(mtx))
-# tgt.srat$LRv1_fThy2n_pred = as.character(bestMatch[match(tgt.srat$cellID,names(bestMatch))])
-# tgt.srat.harm$LRv1_fThy2n_pred = as.character(bestMatch[match(tgt.srat.harm$cellID,names(bestMatch))])
-# 
-# a = as.data.frame(table(tgt.srat.harm$LRv1_fThy2n_pred,tgt.srat.harm$seurat_clusters))
-# a = a[a$Freq >0,]
-# 
-# ##----    Manual annotation ------####
-# library(SoupX)
-# tgt.srat = tgt.srat.harm
-# qm = quickMarkers(tgt.srat@assays$RNA@counts,tgt.srat$seurat_clusters)
-# DimPlot(tgt.srat, group.by = 'seurat_clusters',cols = c(col25,pal34H),label = T,repel = T,label.box = T) + NoLegend()
-# FeaturePlot(tgt.srat,c('percent.mt','scrubScore'))
-# FeaturePlot(tgt.srat,'MS4A1')
-# DimPlot(tgt.srat,cells.highlight = tgt.srat$cellID[tgt.srat$annot_jul23 == 'endo_Capillary'])
-# DimPlot(tgt.srat,cells.highlight = tgt.srat$cellID[tgt.srat$seurat_clusters == 16])
-# tgt.srat$annot = '?'
-# tgt.srat$annot[tgt.srat$seurat_clusters %in% c(0,1,2,3,5,6,7,9,11,13,15,23,25,27,29,39,19,21)] = 'Tumour'
-# tgt.srat$annot[tgt.srat$seurat_clusters %in% c(13,25)] = 'Tumour_fTFC1'
-# tgt.srat$annot[tgt.srat$seurat_clusters %in% c(4,38,26,16)] = 'Thyrocytes'
-# tgt.srat$annot[tgt.srat$seurat_clusters %in% c(30,31)] = 'B_cells'
-# tgt.srat$annot[tgt.srat$seurat_clusters %in% c(10,28)] = 'T_cells'
-# tgt.srat$annot[tgt.srat$seurat_clusters %in% c(40)] = 'Mast.cells'
-# tgt.srat$annot[tgt.srat$seurat_clusters %in% c(8,33,20,22,35,37)] = 'Monocytes'
-# 
-# tgt.srat$annot[tgt.srat$seurat_clusters %in% c(14)] = 'SMCs'
-# tgt.srat$annot[tgt.srat$seurat_clusters %in% c(17)] = 'Mesenchymal'
-# tgt.srat$annot[tgt.srat$seurat_clusters %in% c(32)] = 'LECs'
-# tgt.srat$annot[tgt.srat$seurat_clusters %in% c(12,18)] = 'VECs'
-# tgt.srat$annot[tgt.srat$seurat_clusters %in% c(36)] = 'end_Capillary'
-# tgt.srat$annot[tgt.srat$seurat_clusters %in% c(34)] = 'end_Venus'
-# 
-# tgt.srat$annot[tgt.srat$seurat_clusters %in% c(24)] = 'doublets'
-# 
-# 
-# #tgt.srat$annot[tgt.srat$seurat_clusters %in% c(34,29)] = 'imm_Plasma.cells'
-# 
-# 
-# 
-# 
-# #tgt.srat$annot[tgt.srat$seurat_clusters %in% c(16,28,14)] = 'imm_ILCs'
-# 
-# 
-# 
-# ## Import current annotation
-# current_pPTC = readRDS('~/lustre_mt22/Thyroid/Results/1_thyroid_annotation/thyroid_clean_ann_soupedRho0.2_jul23.RDS')
-# currentAnno = current_pPTC@meta.data
-# 
-# tgt.srat$annot_jul23 = current_pPTC$finalAnn[match(tgt.srat$cellID,current_pPTC$cellID)]
-# tgt.srat$annot_jul23[is.na(tgt.srat$annot_jul23)] = '-'
-# # tgt.srat$annot_apr24 = as.character(tgt.srat$annot)
-# # tgt.srat$annot_apr24[tgt.srat$cellID %in% current_pPTC$cellID[grepl('endo_',current_pPTC$finalAnn)]] = tgt.srat$annot_jul23[tgt.srat$cellID %in% current_pPTC$cellID[grepl('endo_',current_pPTC$finalAnn)]]
-# # tgt.srat$annot_apr24 = gsub('^end_','endo_',tgt.srat$annot_apr24)
-# # tgt.srat$annot_apr24[tgt.srat$cellID %in% current_pPTC$cellID & tgt.srat$seurat_clusters %in% c(14,31)] = tgt.srat$annot_jul23[tgt.srat$cellID %in% current_pPTC$cellID & tgt.srat$seurat_clusters %in% c(14,31)]
-# # tgt.srat$annot_apr24 = gsub('cells','cell',tgt.srat$annot_apr24)
-# # tgt.srat$annot_apr24 = gsub('MonoMac','Macrophage',tgt.srat$annot_apr24)
-# # tgt.srat$annot_apr24[tgt.srat$annot_apr24 == 'thy_Thyrocytes_LRRK2high'] = '?'
-# # tgt.srat$annot_apr24[tgt.srat$annot_apr24 == 'mes_Fibroblast'] = 'mes'
-# # tgt.srat$annot_apr24[tgt.srat$annot_apr24 == 'endo_Venus'] = 'endo_Venous'
-# 
-# tgt.srat$annot_may24 = tgt.srat$annot
-# tgt.srat$finalAnn = tgt.srat$annot_may24
-# tgt.srat$finalAnn_broad = tgt.srat$annot_may24
-# 
-# tgt.srat$finalAnn_broad[tgt.srat$finalAnn_broad %in% c('end_Capillary','end_Venus')] = 'VECs'
-# tgt.srat$finalAnn_broad[tgt.srat$finalAnn_broad %in% c('Monocytes')] = 'Myeloid_cells'
-# tgt.srat$finalAnn_broad[tgt.srat$finalAnn_broad %in% c('Tumour_fTFC1')] = 'Tumour'
+##---------------------------------##
+##   Do some LR_similarity plots   ##
+##---------------------------------##
+model_fp = file.path(outDir,paste0('fThy2n.REF.',annot_column,'_trainModel_',geneFilter,'_4kmaxcells_70perc_2505.RDS'))
+outputs = readRDS(file.path(outDir, paste0('fThy2n.REF.',annot_column,'_on_pThy.tgt_maxCells_70perc_2505_raw_LR_outputs.RDS')))
+
+## annotated Cluster level #
+if(length(outputs) >2){
+  output = outputs[[1]]
+}else{
+  output = outputs[[2]][[1]]
+}
+
+type = ifelse(grepl('ref_',rownames(output)),'REF','TGT')
+show_row_names = T
+column_order = colnames(output)[order(colnames(output))]
+row_order = rownames(output)[!grepl('Tumour',rownames(output))]
+row_order = row_order[order(row_order)]
+row_order = c(row_order,rownames(output)[grepl('Tumour',rownames(output))])
+
+
+#plot_prefix = 'fThy2n.REF.celltype_on_pThy.tgt_maxCells_70perc_240511_'
+plot_prefix = paste0('fThy2n.REF.',annot_column,'_on_pThy.tgt_maxCells_70perc_2505_')
+
+pdf(file.path(outDir,paste0(plot_prefix,'clusterLR.pdf')),width = 12,height = 15)
+
+hm = similarityHeatmap(output,
+                       row_order=row_order,
+                       column_order = column_order,
+                       row_title_rot = 0,
+                       row_title_gp = gpar(fontsize=10),row_names_gp = gpar(fontsize=10),row_names_max_width = unit(6,'cm'),
+                       column_names_gp = gpar(fontsize=10),column_names_max_height = unit(6,'cm'),
+                       split = type, gap = unit(2,'mm'), show_row_names = show_row_names, cluster_rows = F)
+draw(hm)
+dev.off()
+
+
+## annotated Single-cell level #
+if(length(outputs) > 2){
+  output = outputs[['scLR_all']]
+}else{
+  output = outputs[[2]][['scLR_all']]
+}
+
+#tgt.srat$annot = tgt.srat$finalAnn
+#tgt.srat$annot2 = ifelse(tgt.srat$etiology == 'left_inferior_tumour',paste0('tum_',tgt.srat$annot),tgt.srat$annot)
+
+in_mtx = output
+type = paste0(#tgt.srat.harm$donor[match(rownames(output),tgt.srat.harm$cellID)],':',
+              tgt.srat$etiology[match(rownames(output),tgt.srat$cellID)],':',
+              as.character(tgt.srat$seurat_clusters[match(rownames(output),tgt.srat$cellID)]))
+  # ifelse(as.character(tgt.srat$etiology[match(rownames(output),tgt.srat$cellID)]) == 'left_inferior_tumour',
+  #             paste0('tum_',as.character(tgt.srat$seurat_clusters[match(rownames(output),tgt.srat$cellID)])),
+  #             paste0('norm_',as.character(tgt.srat$seurat_clusters[match(rownames(output),tgt.srat$cellID)])))
+type[is.na(type)] = paste0('ref_',as.character(REF.srat$annot[match(rownames(output)[is.na(type)],paste0('ref_',REF.srat$cellID))]))
+type[type == 'NA:NA:NA'] = paste0('ref_',as.character(REF.srat$annot[match(rownames(output)[type == 'NA:NA:NA'],paste0('ref_',REF.srat$cellID))]))
+type[type == 'NA:NA'] = paste0('ref_',as.character(REF.srat$annot[match(rownames(output)[type == 'NA:NA'],paste0('ref_',REF.srat$cellID))]))
+#type = factor(type, levels = )
+
+pdf(file.path(outDir,paste0(plot_prefix,'scLR_all.pdf')),width = 10,height = 50)
+
+show_row_names=F
+hm = similarityHeatmap(in_mtx,
+                       column_order = colnames(output)[order(colnames(output))],
+                       row_title_rot = 0,
+                       row_title_gp = gpar(fontsize=5),#row_names_gp = gpar(fontsize=5),row_names_max_width = unit(6,'cm'),
+                       column_names_gp = gpar(fontsize=10),column_names_max_height = unit(6,'cm'),
+                       split = type, gap = unit(2,'mm'), show_row_names = show_row_names, cluster_rows = F)
+draw(hm)
+
+dev.off()
 
 
 
+
+##----- Add annotation    ------####
+DimPlot(tgt.srat,group.by = 'donor',label = T,repel = T,label.box = T) + NoLegend()
+## For every tumour cell, assign it to the reference cell type of best match....
+mtx = outputs[['scLR_tgt']]
+mtx = mtx[,!is.na(colSums(mtx))]
+bestMatch = do.call(c,lapply(1:nrow(mtx),function(i){
+  n = colnames(mtx)[which(mtx[i,] == max(mtx[i,]))]
+  if(length(n) > 1){
+    n = paste(n,collapse = ':')
+  }
+  return(n)
+}))
+names(bestMatch) = rownames(mtx)
+
+table(tgt.srat$cellID %in% rownames(mtx))
+tgt.srat$LRv1_fThy2n_pred = as.character(bestMatch[match(tgt.srat$cellID,names(bestMatch))])
+#tgt.srat.harm$LRv1_fThy2n_pred = as.character(bestMatch[match(tgt.srat.harm$cellID,names(bestMatch))])
+
+a = as.data.frame(table(tgt.srat$LRv1_fThy2n_pred,tgt.srat$seurat_clusters))
+a = a[a$Freq >0,]
+
+##----    Manual annotation ------####
+library(SoupX)
+#tgt.srat = tgt.srat.harm
+qm = quickMarkers(tgt.srat@assays$RNA@counts,tgt.srat$annot)
+DimPlot(tgt.srat, group.by = 'annot',cols = c(col25,pal34H),label = T,repel = T,label.box = T) + NoLegend()
+FeaturePlot(tgt.srat,c('percent.mt','scrubScore'))
+FeaturePlot(tgt.srat,'MS4A1')
+DimPlot(tgt.srat,cells.highlight = tgt.srat$cellID[tgt.srat$annot_jul23 == 'endo_Capillary'])
+DimPlot(tgt.srat,cells.highlight = tgt.srat$cellID[tgt.srat$annot %in% c('34')])
+tgt.srat$annot = '?'
+tgt.srat$annot[tgt.srat$seurat_clusters %in% c(26,38,35,4,18,0,1,2,6,12,5,25,15,8,9,24,17,19)] = 'Tumour'
+tgt.srat$annot[tgt.srat$seurat_clusters %in% c(39,3)] = 'Thyrocytes'
+tgt.srat$annot[tgt.srat$seurat_clusters %in% c(29)] = 'B_cells'
+tgt.srat$annot[tgt.srat$seurat_clusters %in% c(23,28)] = 'Plasma_cells'
+tgt.srat$annot[tgt.srat$seurat_clusters %in% c(16,13)] = 'T_cells'
+tgt.srat$annot[tgt.srat$seurat_clusters %in% c(11,14,36,33,41)] = 'VECs'
+tgt.srat$annot[tgt.srat$seurat_clusters %in% c(31)] = 'LECs'
+tgt.srat$annot[tgt.srat$seurat_clusters %in% c(27)] = 'Mesenchymal'
+tgt.srat$annot[tgt.srat$seurat_clusters %in% c(10)] = 'SMCs'
+tgt.srat$annot[tgt.srat$seurat_clusters %in% c(40)] = 'Mast_cells'
+tgt.srat$annot[tgt.srat$seurat_clusters %in% c(20,22,7,30,32)] = 'Monocytes'
+tgt.srat$annot[tgt.srat$annot == '?'] = as.character(tgt.srat$seurat_clusters[tgt.srat$annot == '?'])
+tgt.srat$annot[tgt.srat$annot == '37'] = 'lowQual'
+
+
+#tgt.srat$annot[tgt.srat$seurat_clusters %in% c(28)] = 'doublets'
+
+# Subclustering non-cancer cells
+s = subset(tgt.srat,annot != 'Tumour')
+s = standard_clustering(s,runHarmony = T,harmonyVar='donor')
+DimPlot(s, group.by = 'annot_tmp',cols = c(col25,pal34H),label = T,repel = T,label.box = T) + NoLegend()
+s$annot_tmp = s$annot
+s$annot_tmp[s$seurat_clusters %in% c(18,13,29,26,23,28,22,24,25)] = as.character(s$seurat_clusters[s$seurat_clusters %in% c(18,13,29,26,23,28,22,24,25)])
+qm = quickMarkers(s@assays$RNA@counts,s$annot_tmp)
+
+DimPlot(tgt.srat,cells.highlight = s$cellID[s$annot_tmp == '29'])
+table(tgt.srat$seurat_clusters[tgt.srat$cellID %in% s$cellID[s$annot_tmp == '21']])
+
+s$annot_tmp[s$annot_tmp == '13'] = 'B_cells'
+s$annot_tmp[s$annot_tmp %in% c('21','34','37')] = 'doublets'
+s$annot_tmp[s$annot_tmp == '22'] = 'endo_perivascular'
+s$annot_tmp[s$annot_tmp == '24'] = 'capillary_VECs'
+s$annot_tmp[s$annot_tmp == '25'] = 'vein_VECs'
+s$annot_tmp[s$annot_tmp == '26'] = 'DC1'
+s$annot_tmp[s$annot_tmp == '28'] = 'Fibroblasts'
+s$annot_tmp[s$annot_tmp == '29'] = 'unknown'
+s$annot_tmp[s$annot_tmp == '23'] = s$annot[s$annot_tmp == '23']
+
+## Add this back to tgt.srat
+table(tgt.srat$annot[tgt.srat$cellID %in% s$cellID[s$annot_tmp == 'unknown']])
+DimPlot(tgt.srat,cells.highlight = tgt.srat$cellID[tgt.srat$cellID %in% s$cellID[s$annot_tmp == 'unknown']])
+tgt.srat$annot[tgt.srat$cellID %in% s$cellID[s$annot_tmp == 'B_cells'] & tgt.srat$annot == '21'] = 'B_cells'
+tgt.srat$annot[tgt.srat$cellID %in% s$cellID[s$annot_tmp == 'doublets']] = 'doublets'
+tgt.srat$annot[tgt.srat$cellID %in% s$cellID[s$annot_tmp == 'DC1'] & tgt.srat$annot %in% c('21','34')] = 'DC1'
+tgt.srat$annot[tgt.srat$cellID %in% s$cellID[s$annot_tmp == 'Fibroblasts'] & tgt.srat$annot %in% c('SMCs')] = 'Fibroblasts'
+tgt.srat$annot[tgt.srat$cellID %in% s$cellID[s$annot_tmp == 'unknown']] = 'unknown'
+tgt.srat$annot[tgt.srat$annot %in% c('21','34')] = 'doublets'
+
+tgt.srat$celltype_detailed = as.character(tgt.srat$annot)
+tgt.srat$celltype_detailed[tgt.srat$cellID %in% s$cellID[s$annot_tmp == 'endo_perivascular']] ='endo_perivascular'
+tgt.srat$celltype_detailed[tgt.srat$cellID %in% s$cellID[s$annot_tmp == 'capillary_VECs']] ='capillary_VECs'
+tgt.srat$celltype_detailed[tgt.srat$cellID %in% s$cellID[s$annot_tmp == 'vein_VECs']] ='vein_VECs'
+
+
+
+## Check with dotplot
 
 
 
@@ -381,38 +387,50 @@ keyHaemMarkers = c('CD34','CD38','SPINK2','MLLT3','PRSS57', # HSC_MPP
                'APOA1','SCD','ALB','TTR' # Hepatocyte
 )
 
-# DotPlot(tgt.srat,features = unique(keyHaemMarkers))+
-#   RotatedAxis()+
-#   theme(axis.text.x = element_text(size=7,vjust = 0.5,hjust = 1,angle = 90))
-# 
-# DotPlot(tgt.srat,group.by = 'finalAnn_broad',
-#         features = unique(c('NKX2-1','FOXE1','HHEX','UROD',
-#                      'CD302','BAG3','BLOC1S6','DIO2','DUOX1','DUOX2','DUOXA1','DUOXA2',
-#                      'SLC5A5','ANO1','SLC26A4','TPO','IYD','TG','PAX8','GLIS3','TSHR','SLC16A2','SLC16A10','EXOC4','ELMO1','VPS13C','STON2','SPG11',
-# 
-#                      'COL1A1', 'COL1A2', 'COL3A1', 'ACTA2','PTPRC','PECAM1', 'CD34', 'CDH5', 'VWF','HBA2','EPCAM', 'KRT18', 'KRT19','TG','TPO','EPCAM','KRT18','KRT19','S100A4', 'FN1', 'IGFBP6','TMSB4X'
-# ))) + RotatedAxis() + theme(axis.text.x = element_text(size=7,vjust = 0.5,hjust = 1,angle = 90))
-# 
-# 
-# 
-# 
-# 
-# df = as.data.frame(table(tgt.srat$LRv1_fThy2n_pred,tgt.srat$annot_may24))
-# df=df[df$Freq >0,]
-# View(df)
-# 
-# 
-# 
-# DimPlot(tgt.srat,group.by = 'finalAnn_broad',cols = c(col25,pal34H,col25),label = T,label.box = T,repel = T) + NoLegend()
-# DimPlot(tgt.srat,cells.highlight = tgt.srat$cellID[tgt.srat$annot_lvl2 == '?'])
-# 
-# ##---- Save Annotation results ------####
-# 
-# mdat = cbind(tgt.srat@meta.data,tgt.srat@reductions$umap@cell.embeddings)
-# write.csv(mdat,'~/lustre_mt22/Thyroid/Results_v2/03_pThyCancer_annotation/pPTC_clean_soupedRhoNone_may24_HARM_annotated_mdat.csv')
-# 
+
+Idents(tgt.srat) = tgt.srat$annot
+DotPlot(tgt.srat,features = unique(keyHaemMarkers))+
+  RotatedAxis()+
+  theme(axis.text.x = element_text(size=7,vjust = 0.5,hjust = 1,angle = 90))
+
+DotPlot(tgt.srat,group.by = 'seurat_clusters',
+        features = unique(c('NKX2-1','FOXE1','HHEX','UROD',
+                     'CD302','BAG3','BLOC1S6','DIO2','DUOX1','DUOX2','DUOXA1','DUOXA2',
+                     'SLC5A5','ANO1','SLC26A4','TPO','IYD','TG','PAX8','GLIS3','TSHR','SLC16A2','SLC16A10','EXOC4','ELMO1','VPS13C','STON2','SPG11',
+
+                     'COL1A1', 'COL1A2', 'COL3A1', 'ACTA2','PTPRC','PECAM1', 'CD34', 'CDH5', 'VWF','HBA2','EPCAM', 'KRT18', 'KRT19','TG','TPO','EPCAM','KRT18','KRT19','S100A4', 'FN1', 'IGFBP6','TMSB4X'
+))) + RotatedAxis() + theme(axis.text.x = element_text(size=7,vjust = 0.5,hjust = 1,angle = 90))
+
+
+
+
+
+df = as.data.frame(table(tgt.srat$LRv1_fThy2n_pred,tgt.srat$annot_may24))
+df=df[df$Freq >0,]
+View(df)
+
+
+
+DimPlot(tgt.srat,group.by = 'finalAnn_broad',cols = c(col25,pal34H,col25),label = T,label.box = T,repel = T) + NoLegend()
+DimPlot(tgt.srat,cells.highlight = tgt.srat$cellID[tgt.srat$annot_lvl2 == '?'])
+
+##---- Save Annotation results ------####
+# Harmony version
+mdat = cbind(tgt.srat@meta.data,tgt.srat@reductions$umap@cell.embeddings)
+mdat$annot[mdat$annot == 'Thyrocytes' & mdat$donor == 'Y24' & mdat$etiology =='Tumour'] = 'Tumour'
+write.csv(mdat,file.path('Results/2505/PTC_snRNAseq/03_pThyCancer_annotation','pPTC_clean_soupedXrhoLimNone_annotated_2505_HARM_mdat.csv'))
+
+# non-integrated version
+srat = readRDS('Results/2505/PTC_snRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_2505.RDS')
+srat@meta.data = cbind(srat@meta.data,mdat[match(srat$cellID,mdat$cellID),!colnames(mdat) %in% c(colnames(srat@meta.data),'UMAP_1','UMAP_2')])
+DimPlot(srat,group.by = 'annot',cols = c(col25,pal34H),label = T,repel = T,label.box = T) + NoLegend()
+mdat = cbind(srat@meta.data,srat@reductions$umap@cell.embeddings)
+write.csv(mdat,file.path('Results/2505/PTC_snRNAseq/03_pThyCancer_annotation','pPTC_clean_soupedXrhoLimNone_annotated_2505_mdat.csv'))
+saveRDS(srat,'Results/2505/PTC_snRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_annotated_2505.RDS')
+
+
 # ## Remove doublet cluster
-# tgt.srat = subset(tgt.srat,subset = annot_may24 != 'doublets')
+# srat = subset(srat,subset = annot != 'doublets')
 # tgt.srat = standard_clustering(tgt.srat,runHarmony = T,harmonyVar = c('donor'))
 # 
 # 

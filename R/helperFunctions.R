@@ -26,8 +26,11 @@ import_bulkRNA_thyroid = function(bulk_sources = c('Lee2021','Yoo2016','TCGA_Thy
   
   
   if('He2021' %in% bulk_sources){
-    sce_path = '~/lustre_mt22/Thyroid/Data/He_etal_2021/aPTC_He_2021_sce.RDS'
-    he21_sce = readRDS(sce_path)
+    se_path = '~/lustre_mt22/Thyroid/Data/He_etal_2021/aPTC_He_2021_sce.RDS'
+    if(!file.exists(se_path)){
+      raw_count = read.csv('Data/')
+    }
+    he21_sce = readRDS(se_path)
     sce_list[['He2021']] = he21_sce
     he21_mdat = as.data.frame(colData(he21_sce))
     
@@ -43,8 +46,8 @@ import_bulkRNA_thyroid = function(bulk_sources = c('Lee2021','Yoo2016','TCGA_Thy
   }
   
   if('Lee2021' %in% bulk_sources){
-    sce_path = '~/lustre_mt22/Thyroid/Data/Lee_etal_2021/pedPTC_Lee_2021_sce.RDS'
-    pedPTC_sce = readRDS(sce_path)
+    se_path = '~/lustre_mt22/Thyroid/Data/Lee_etal_2021/pedPTC_Lee_2021_sce.RDS'
+    pedPTC_sce = readRDS(se_path)
     sce_list[['Lee2021']] = pedPTC_sce
     pedPTC_mdat = as.data.frame(colData(pedPTC_sce))
     
@@ -64,8 +67,8 @@ import_bulkRNA_thyroid = function(bulk_sources = c('Lee2021','Yoo2016','TCGA_Thy
   
   
   if('Yoo2016' %in% bulk_sources){
-    sce_path = '~/lustre_mt22/Thyroid/Data/Yoo_etal_2016/adultPTC_Yoo_2016_sce.RDS'
-    aThy_sce = readRDS(sce_path)
+    se_path = '~/lustre_mt22/Thyroid/Data/Yoo_etal_2016/adultPTC_Yoo_2016_sce.RDS'
+    aThy_sce = readRDS(se_path)
     sce_list[['Yoo2016']] = aThy_sce
     
     aThy_mdat = as.data.frame(colData(aThy_sce))
@@ -83,8 +86,20 @@ import_bulkRNA_thyroid = function(bulk_sources = c('Lee2021','Yoo2016','TCGA_Thy
   }
   
   if('TCGA_Thyroid' %in% bulk_sources){
-    tcga_sce_path_m2 = '~/lustre_mt22/Thyroid/Data/TCGA_Thyroid/TCGA_Thyroid_gdc0923_sce.RDS'
-    tcga_sce = readRDS(tcga_sce_path_m2)
+    tcga_se_path_m2 = '~/lustre_mt22/Thyroid/Data/TCGA_Thyroid/TCGA_Thyroid_gdc0923_sce.RDS'
+    tcga_se_path = 'Data/published_bulkRNAseq/TCGA_Thyroid/TCGA_Thyroid_bulkRNA_se.RDS'
+    if(!file.exists(tcga_se_path)){
+      query <- TCGAbiolinks::GDCquery(
+        project = "TCGA-THCA",  
+        data.category = "Transcriptome Profiling",
+        data.type = "Gene Expression Quantification",
+        workflow.type = "STAR - Counts"
+      )
+      
+      GDCdownload(query)
+      data <- GDCprepare(query)
+    }
+    tcga_sce = readRDS(tcga_se_path_m2)
     sce_list[['TCGA_Thyroid']] = tcga_sce
     tcga_mdat = as.data.frame(colData(tcga_sce))
     
@@ -103,8 +118,8 @@ import_bulkRNA_thyroid = function(bulk_sources = c('Lee2021','Yoo2016','TCGA_Thy
   
   
   if('snPaedThyroid' %in% bulk_sources){
-    sce_path = '~/lustre_mt22/Thyroid/Data/paedThyroid_snRNAseq_pseudobulk_sce.RDS'
-    pThyroid_sce = readRDS(sce_path)
+    se_path = '~/lustre_mt22/Thyroid/Data/paedThyroid_snRNAseq_pseudobulk_sce.RDS'
+    pThyroid_sce = readRDS(se_path)
     sce_list[['snPaedThyroid']] = pThyroid_sce
     
     pThyroid_mdat = as.data.frame(colData(pThyroid_sce))
@@ -121,8 +136,8 @@ import_bulkRNA_thyroid = function(bulk_sources = c('Lee2021','Yoo2016','TCGA_Thy
   }
   
   if('scfThy' %in% bulk_sources){
-    sce_path = '~/lustre_mt22/Thyroid/Data/fThy_scRNAseq_pseudobulk_sce.RDS'
-    scfThy_sce = readRDS(sce_path)
+    se_path = '~/lustre_mt22/Thyroid/Data/fThy_scRNAseq_pseudobulk_sce.RDS'
+    scfThy_sce = readRDS(se_path)
     sce_list[['scfThy']] = scfThy_sce
     
     scfThy_mdat = as.data.frame(colData(scfThy_sce))
@@ -141,8 +156,8 @@ import_bulkRNA_thyroid = function(bulk_sources = c('Lee2021','Yoo2016','TCGA_Thy
   
   
   if('scaThy' %in% bulk_sources){
-    sce_path = '~/lustre_mt22/Thyroid/Data/aThy_scRNAseq_pseudobulk_sce.RDS'
-    scaThy_sce = readRDS(sce_path)
+    se_path = '~/lustre_mt22/Thyroid/Data/aThy_scRNAseq_pseudobulk_sce.RDS'
+    scaThy_sce = readRDS(se_path)
     sce_list[['scaThy']] = scaThy_sce
     
     scaThy_mdat = as.data.frame(colData(scaThy_sce))
@@ -160,8 +175,8 @@ import_bulkRNA_thyroid = function(bulk_sources = c('Lee2021','Yoo2016','TCGA_Thy
   
   
   if('GTEx_Thyroid' %in% bulk_sources){
-    gtex_sce_path = '~/lustre_mt22/Thyroid/Data/GTEx_Thyroid/GTEx_Thyroid_sce.RDS'
-    gtex_sce = readRDS(gtex_sce_path)
+    gtex_se_path = '~/lustre_mt22/Thyroid/Data/GTEx_Thyroid/GTEx_Thyroid_sce.RDS'
+    gtex_sce = readRDS(gtex_se_path)
     sce_list[['GTEx_Thyroid']] = gtex_sce
     
     gtex_mdat = as.data.frame(colData(gtex_sce))
@@ -181,8 +196,8 @@ import_bulkRNA_thyroid = function(bulk_sources = c('Lee2021','Yoo2016','TCGA_Thy
   
   
   if('StJudes_Thyroid' %in% bulk_sources){
-    stJudes_sce_path = '~/lustre_mt22/Thyroid/Data/StJudes_Thyroid/StJudes_Thyroid_230921_sce.RDS'
-    stJudes_sce = readRDS(stJudes_sce_path)
+    stJudes_se_path = '~/lustre_mt22/Thyroid/Data/StJudes_Thyroid/StJudes_Thyroid_230921_sce.RDS'
+    stJudes_sce = readRDS(stJudes_se_path)
     sce_list[['StJudes_Thyroid']] = stJudes_sce
     
     stJudes_mdat = as.data.frame(colData(stJudes_sce))
@@ -199,14 +214,14 @@ import_bulkRNA_thyroid = function(bulk_sources = c('Lee2021','Yoo2016','TCGA_Thy
   }
   
   if('inhouse' %in% bulk_sources){
-    sce_path = '~/lustre_mt22/Thyroid/Data/inhouse_bulkRNA_thyroid/inhouse_bulkRNA_thyroid_2410_sce.RDS'
-    inhouse_sce = readRDS(sce_path)
-    sce_list[['Sanger']] = inhouse_sce
-    inhouse_mdat = as.data.frame(colData(inhouse_sce))
+    se_path = 'Data/inhouse_bulk/inhouse_bulkRNA_fetalThyroid_paedPTC.RDS'
+    inhouse_se = readRDS(se_path)
+    sce_list[['Sanger']] = inhouse_se
+    inhouse_mdat = as.data.frame(colData(inhouse_se))
     
     bulk_samples = rbind(bulk_samples,inhouse_mdat[,c('sampleID','source','sampleName','cancerType','age','sex')])
     
-    inhouse_rawCnt = assays(inhouse_sce)[['counts_raw']]
+    inhouse_rawCnt = assays(inhouse_se)[['counts_raw']]
     if(nrow(raw_count) == 0){
       raw_count = inhouse_rawCnt
     }else{
@@ -217,8 +232,8 @@ import_bulkRNA_thyroid = function(bulk_sources = c('Lee2021','Yoo2016','TCGA_Thy
   }
   
   if('fAdr' %in% bulk_sources){
-    sce_path = '~/lustre_mt22/Thyroid/Data/fAdr.SCPs_scRNAseq_pseudobulk_sce.RDS'
-    scfAdr_sce = readRDS(sce_path)
+    se_path = '~/lustre_mt22/Thyroid/Data/fAdr.SCPs_scRNAseq_pseudobulk_sce.RDS'
+    scfAdr_sce = readRDS(se_path)
     sce_list[['fAdr']] = scfAdr_sce
     
     scfAdr_mdat = as.data.frame(colData(scfAdr_sce))
