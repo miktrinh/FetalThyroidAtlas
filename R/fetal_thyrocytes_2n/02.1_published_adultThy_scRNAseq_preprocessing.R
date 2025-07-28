@@ -16,12 +16,13 @@ library(tidyverse)
 source("R/utils/sc_basicQC.R")
 
 
-dataset = c('Wang22','Pu21','Hong23','Lu23','Mosteiro23')
+dataset = c('Wang22','Pu21','Hong23','Lu23','Mosteiro23','Peng21')
 output_objects = c('Wang22'='Data/published_scRNAseq/Wang_etal_2022/Wang_etal_2022.RDS',
                    'Pu21'='Data/published_scRNAseq/Pu_etal_2021/Pu_etal_2021.RDS',
                    'Hong23'='Data/published_scRNAseq/Hong_etal_2023/Hong_etal_2023.RDS',
                    'Mosteiro23'='Data/published_scRNAseq/Mosteiro_etal_2023/Mosteiro_etal_2023.RDS',
-                   'Lu23' = 'Data/published_scRNAseq/Lu_etal_2023/Lu_etal_2023.RDS')
+                   'Lu23' = 'Data/published_scRNAseq/Lu_etal_2023/Lu_etal_2023.RDS',
+                   'Peng21'='Data/published_scRNAseq/Peng_etal_2021/Peng_etal_2021.RDS')
 dataset_toProcess = names(output_objects[!file.exists(output_objects)])
 for(dataset in dataset_toProcess){
   if(dataset=='Mosteiro23'){
@@ -263,8 +264,10 @@ for(dataset in dataset_toProcess){
     DimPlot(srat,group.by = 'celltype')
     
     saveRDS(srat,output_objects[dataset])
+  }else if(dataset == 'Peng21'){
+    # As this dataset did not published annotation, please run R/fetal_thyrocytes_2n/02.0_annotate_Peng21.R
+    message('Please run R/fetal_thyrocytes_2n/02.0_annotate_Peng21.R')
   }
-  
 }
 
 

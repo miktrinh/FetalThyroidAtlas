@@ -41,15 +41,15 @@ gene_map <- rtracklayer::import(gtf)  %>%
   subset(type == "gene")
 
 names(gene_map) <- gene_map$gene_id
-
+write.csv(as.data.frame(gene_map),'~/FetalThyroidAtlas/Results/geneMap.csv')
 
 
 ##---------------------------------------------##
 ##   0. Process inhouse bulk RNA-seq data    ####
 ##---------------------------------------------##
-bulk_raw_counts = read.delim('Data/inhouse_bulk/expression_tables/salmon_reads.counts.tsv',sep = '\t')
+bulk_raw_counts = read.delim('Data/inhouse_bulk/results/expression_tables/salmon_reads.counts.tsv',sep = '\t')
 rownames(bulk_raw_counts) = bulk_raw_counts$ensemblID
-bulk_raw_TPM = read.delim('Data/inhouse_bulk/expression_tables/salmon_reads.TPM.tsv',sep = '\t')
+bulk_raw_TPM = read.delim('Data/inhouse_bulk/results/expression_tables/salmon_reads.TPM.tsv',sep = '\t')
 rownames(bulk_raw_TPM) = bulk_raw_TPM$ensemblID
 
 row_data = bulk_raw_counts[,c("ensemblID", "geneSymbol", "geneLength","effLength")]
@@ -68,6 +68,7 @@ col_data$cancerType = dplyr::case_when(grepl('Normal',col_data$Tissue) ~ 'Normal
                                        grepl('Tumour',col_data$Tissue) ~ 'PTC',TRUE ~ 'others')
 colnames(col_data)[colnames(col_data) == 'Sex'] = 'sex'
 colnames(col_data)[colnames(col_data) == 'Age'] = 'age'
+col_data$age[grepl('fetus_',col_data$age)] = 'foetus'
 col_data[,c('sampleID','source','sampleName','cancerType','age','sex')]
 
 
@@ -100,16 +101,53 @@ fThy$annot = fThy$finalAnn
 fThy$cellID = rownames(fThy@meta.data)
 
 ##----- Normal adult
-aThy_2 = readRDS('Data/published_scRNAseq/Mosteiro_etal_2023/Mosteiro_etal_2023.RDS')
-aThy_2$annot[aThy_2$annot %in% c('aTFC1','aTFC2','aTFC4','aTFC5')] = 'aTFC1'
-aThy_2$annot[aThy_2$annot %in% c('aTFC3')] = 'aTFC2'
-aThy_2$dataset = 'aThy_Mosteiro23'
-Idents(aThy_2) = aThy_2$annot
+aThy_Mosteiro23 = readRDS('Data/published_scRNAseq/Mosteiro_etal_2023/Mosteiro_etal_2023.RDS')
+aThy_Mosteiro23$annot[aThy_Mosteiro23$annot %in% c('aTFC1','aTFC2','aTFC4','aTFC5')] = 'aTFC1'
+aThy_Mosteiro23$annot[aThy_Mosteiro23$annot %in% c('aTFC3')] = 'aTFC2'
+aThy_Mosteiro23$dataset = 'aThy_Mosteiro23'
+Idents(aThy_Mosteiro23) = aThy_Mosteiro23$annot
+
+##----- PTC adult
+source('R/utils/sc_utils.R')
+
+adult_PTC_dataset_list = c('Pu21'='Data/published_scRNAseq/Pu_etal_2021/Pu_etal_2021.RDS',
+                      'Lu23'='Data/published_scRNAseq/Lu_etal_2023/Lu_etal_2023.RDS',
+                      'Peng21'='Data/published_scRNAseq/Peng_etal_2021/Peng_etal_2021_thyOnly.RDS')
+adult_PTC_sratObj_list = list()
+for(dataset in names(adult_PTC_dataset_list)){
+  srat = readRDS(adult_PTC_dataset_list[[dataset]])
+  if(dataset == 'Pu21'){
+    ## Pu et al., 2021
+    srat = subset(srat,subset = cellID %in% srat$cellID[srat$celltype %in% c('fTFC1','fTFC2','thy_Lumen-forming') & 
+                                                          srat$tissue_type %in% c('para-tumour','tumour')])
+    srat$annot = paste0(srat$celltype,'-',srat$tissue_type)
+    srat$annot = gsub('thy_Lumen-forming','fTFC2',srat$annot)
+    srat$dataset = 'Pu_2021'
+    
+  }else if(dataset == 'Lu23'){
+    ## Lu et al., 2023
+    srat = subset(srat,subset = cellID %in% srat$cellID[srat$celltype %in% c('Epithelial cell','Malignant cell')])
+    srat$annot = srat$celltype
+    srat$annot[srat$annot == 'Epithelial cell'] = 'Thyrocytes'
+    srat$annot[srat$annot == 'Malignant cell'] = 'Tumour'
+    srat$dataset <- 'Lu_2023'
+    
+  }else if(dataset == 'Peng21'){
+    ## Peng et al., 2021
+    srat = subset(srat,subset = cellID %in% srat$cellID[srat$annot %in% c('Thyrocytes','Tumour')])
+    srat$dataset = 'Peng_2021'
+  }
+  
+  srat = standard_clustering(srat)
+  DimPlot(srat,group.by = 'annot')
+  
+  adult_PTC_sratObj_list[[dataset]] = srat
+}
 
 
-# aPTC_Pu21 = readRDS('~/lustre_mt22/Thyroid/Data/published_scRNAseq/Pu_etal_2021/Pu21_annotated_sratObj.RDS')
-# aPTC_Pu21$dataset = 'aPTC_Pu21'
-# aPTC_Pu21$annot = aPTC_Pu21$celltype
+
+
+
 
 
 
@@ -206,9 +244,9 @@ deg = read.csv('SupplementaryTables/SupplementaryTableS8_fTFC1.2_geneSignatures.
 colnames(deg) = c('ensID','geneSym','chr','logFC','logCPM','F','PValue','FDR','pct_fTFC1', 'pct_fTFC2','direction','module')
 write.csv(deg,file.path(outDir,'fTFC1.2_top100_geneSignatures.csv'))
 
-##------------------------------------------------------##
+##--------------------------------------------------------##
 ##    1.--Plot expression of the gene modules (DotPlot) ####
-##------------------------------------------------------##
+##--------------------------------------------------------##
 
 genes_toPlot = c(deg$geneSym[deg$direction == 'fTFC2_down'],
                  deg$geneSym[deg$direction == 'fTFC2_up'])
@@ -257,39 +295,85 @@ DimPlot(fThyrocytes,group.by = 'celltype')
 # FeaturePlot(fThyroid,'fTFC2_UCell') 
 # write.csv(fThyroid@meta.data,'~/lustre_mt22/Thyroid/Results_v2/06_fThyrocytes_module_in_pPTC/UCell_fTFC1.2_signature_inFThyroid_2412.csv')
 
+##----- Normal adult (Mosteiro)
+aThy_Mosteiro23 <- UCell::AddModuleScore_UCell(aThy_Mosteiro23, features = geneList,ncores = 10)
+FeaturePlot(aThy_Mosteiro23,'fTFC2_UCell') 
 
-##----- Normal adult
-aThy_2 <- UCell::AddModuleScore_UCell(aThy_2, features = geneList,ncores = 3)
-FeaturePlot(aThy_2,'fTFC2_combined_UCell')
-DimPlot(aThy_2,group.by = 'seurat_clusters')
+##----- Normal + PTC adult
+adult_PTC_sratObj_list = lapply(adult_PTC_sratObj_list,function(x){
+  srat = UCell::AddModuleScore_UCell(x, features = geneList,ncores = 10)
+  return(srat)
+})
 
-
-# aPTC_Pu21 <- UCell::AddModuleScore_UCell(aPTC_Pu21, features = geneList,ncores = 3)
-# FeaturePlot(aPTC_Pu21,'fTFC1_UCell')
+# ##----- Normal + PTC paediatric
+# pThy = readRDS('Results/2505/PTC_snRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_annotated_2505.RDS')
+# pThy = subset(pThy,subset = annot %in% c('Thyrocytes','Tumour'))
+# pThy = standard_clustering(pThy)
+# pThy$annot = pThy$celltype
+# pThy$cellID
+# pThy$dataset <- 'pPTC_Sanger'
+# 
+# pThy <- UCell::AddModuleScore_UCell(pThy, features = geneList,ncores = 20)
+# FeaturePlot(pThy,'fTFC2_combined_UCell')
 
 
 ##----- Aggregate data -------##
 columns = c('cellID','annot','fTFC1_UCell','fTFC2_UCell','fTFC1_combined_UCell','fTFC2_combined_UCell','dataset')
-ucell_data = do.call(rbind,list('fThy'=fThy@meta.data[,columns],
-                                'aThy'=aThy_2@meta.data[,columns]
-                                # 'aPTC_Pu21'=aPTC_Pu21@meta.data[,columns]
-))
-ucell_data$annot[ucell_data$annot %in% c('aTFC1')] = 'fTFC1'
-ucell_data$annot[ucell_data$annot %in% c('aTFC2')] = 'fTFC2'
 
-write.csv(ucell_data,file.path(outDir,'fTFC1.2_top100_geneSignatures_UCELL_scRNAseq.csv'))
+## Adult PTC datasets
+ucell_data_adult = do.call(rbind,lapply(adult_PTC_sratObj_list,function(x){
+  x@meta.data[,columns]
+}))
+
+ucell_data_adult$annot_2 = gsub('fTFC1-|fTFC2-','',ucell_data_adult$annot)
+ucell_data_adult$annot_2[ucell_data_adult$annot_2 %in% c('Thyrocytes')] = 'Normal'
+ucell_data_adult$annot_2[ucell_data_adult$annot_2 %in% c('Malignant cell','tumour')] = 'Tumour'
+ucell_data_adult$annot_2[ucell_data_adult$annot_2 %in% c('Epithelial cell','para-tumour')] = 'Normal'
+
+write.csv(ucell_data_adult,file.path(outDir,'fTFC1.2_top100_geneSignatures_UCELL_scRNAseq_adultPTC.csv'))
+
+
+## Normal fetal + adult datasets
+ucell_data_normal = do.call(rbind,list('fThy'=fThy@meta.data[,columns],
+                                       'aThy_Mosteiro23'=aThy_Mosteiro23@meta.data[,columns]
+))
+ucell_data_normal$annot[ucell_data_normal$annot %in% c('aTFC1')] = 'fTFC1'
+ucell_data_normal$annot[ucell_data_normal$annot %in% c('aTFC2','thy_Lumen-forming')] = 'fTFC2'
+
+write.csv(ucell_data_normal,file.path(outDir,'fTFC1.2_top100_geneSignatures_UCELL_scRNAseq_fetal.adult.Thy.csv'))
+
+ucell_data_adult = read.csv(file.path(outDir,'fTFC1.2_top100_geneSignatures_UCELL_scRNAseq_adultPTC.csv'))
+ucell_data_normal = read.csv(file.path(outDir,'fTFC1.2_top100_geneSignatures_UCELL_scRNAseq_fetal.adult.Thy.csv'))
+
+## Combine them
+ucell_data_adult$annot = ucell_data_adult$annot_2
+ucell_data = rbind(ucell_data_normal,ucell_data_adult[,colnames(ucell_data_normal)])
 
 ## Do some plots
-celltypes_toKeep = unique(ucell_data$annot[grepl('Thyrocyte|TFC1|TFC2|Tumour',ucell_data$annot)])
-ggplot(ucell_data[ucell_data$annot %in% celltypes_toKeep,],aes(annot,fTFC2_combined_UCell))+
-  geom_boxplot(outlier.shape = NA)+
-  #scale_y_log10()+
-  geom_hline(yintercept = 0)+
-  facet_grid(.~dataset,scales = 'free_x',space = 'free_x')+
-  theme_classic()+
-  theme(axis.text.x = element_text(angle=90,vjust = 0.5,hjust = 1))
+celltypes_toKeep = unique(ucell_data$annot[grepl('Thyrocyte|TFC1|TFC2|Tumour|Epithelial|Malignant|Normal',ucell_data$annot)])
 
-ggplot(ucell_data[grepl('aTFC|Thyrocyte|Tum|Met|fTFC',ucell_data$annot),],aes(fTFC2_UCell,fTFC1_UCell,col=annot))+
+ggplot(ucell_data[ucell_data$annot %in% celltypes_toKeep &
+                    ucell_data$dataset %in% c('Lu_2023','Peng_2021','Pu_2021'),],aes(annot,fTFC1_UCell))+
+  geom_hline(yintercept = 0,linetype=2,col=colAlpha(grey(0.4),0.4))+
+  geom_boxplot(outlier.shape = NA,aes(fill = annot))+
+  geom_quasirandom(size = 0.1,alpha = 0.1)+
+  #scale_y_log10()+
+  scale_fill_manual(values = c('Normal' = grey(0.8),'Tumour'=colAlpha('#511378',0.8)))+
+  facet_grid(.~dataset,scales = 'free_x',space = 'free_x')+
+  # theme_classic()+
+  # theme(axis.text.x = element_text(angle=90,vjust = 0.5,hjust = 1))+
+  theme_classic()+
+  #ylim(-0.1,0.1)+
+  #ggtitle(title)+
+  xlab('')+ylab('fTFC2 signature score')+
+  theme(panel.border = element_rect(fill=F,colour = 'black'),axis.line = element_blank(),
+        strip.background=element_rect(linewidth=0),
+        axis.text = element_text(colour = 'black'),
+        axis.ticks = element_line(colour = 'black'),
+        axis.text.x = element_text(size = 10,angle = 90, vjust = 0.5,hjust = 1,colour = 'black'),legend.position = 'none')
+
+
+ggplot(ucell_data[grepl('aTFC|Thyrocyte|Tum|Met|fTFC|Malig|Epi',ucell_data$annot),],aes(fTFC2_UCell,fTFC1_UCell,col=annot_2))+
   geom_point(size=0.2,alpha=0.2)+
   geom_hline(yintercept = 0.3)+
   geom_vline(xintercept = 0.2)+
@@ -307,12 +391,13 @@ ggplot(ucell_data[ucell_data$annot %in% celltypes_toKeep,],aes(annot,score,fill=
   xlab('')+
   facet_grid(.~dataset,scales = 'free_x',space = 'free_x')+
   theme_classic()+
-  theme(axis.text.x = element_text(angle=90,vjust = 0.5,hjust = 1))
+  theme(axis.text.x = element_text(angle=90,vjust = 0.5,hjust = 1),
+        panel.border = element_rect(fill=F),axis.line = element_blank())
 
 
 ## Latest version in figures.R
 fig4b_fTFC1.2_moduleScore = function(){
-  ucell_data = read.csv(file.path(outDir,'fTFC1.2_top100_geneSignatures_UCELL_scRNAseq.csv'),row.names = 1)
+  ucell_data = read.csv(file.path(outDir,'fTFC1.2_top100_geneSignatures_UCELL_scRNAseq_fetal.adult.Thy.csv'),row.names = 1)
   
   columns = c('cellID','annot','fTFC1_UCell','fTFC2_UCell','fTFC1_combined_UCell','fTFC2_combined_UCell','dataset')
   
@@ -391,18 +476,19 @@ fig4b_fTFC1.2_moduleScore = function(){
     
   }
   
-  saveFig(file.path(plotDir,'Fig4e_fTFC1.2_moduleScore_fThy_aThy'),plotFun_fTFC1.2_moduleScore_fThy.aThy,rawData=dd,width = 4.5,height = 5.6,res = 500,useDingbats = F)
+  saveFig(file.path(plotDir,'Fig4e_fTFC1.2_moduleScore_fThy_aThy'),plotFun_fTFC1.2_moduleScore_fThy.aThy,rawData=dd,width = 4.5,height = 5.6,res = 500)
   
   
   
   plotFun_fTFC1.2_moduleScoreDifference_fThy.aThy = function(noFrame=FALSE,noPlot=FALSE){
     library(ggbeeswarm)
+    dd$annot = factor(dd$annot,c('TFC1','TFC2'))
     if(noPlot & !noFrame){
       dd.sub = dd[sample(1:nrow(dd),100),]
       p1 = ggplot(dd.sub,aes(annot,fTFC2_combined_UCell,fill=annot))+
         geom_quasirandom(width = 0.2,size=0.25,alpha=0.2,col=grey(0.7))+
         geom_boxplot(outlier.size = 0.01,alpha=0.7,width=0.24)+
-        scale_fill_manual(values = c('orange',grey(0.1)))+
+        scale_fill_manual(values = c('TFC2'='orange','TFC1'=grey(0.1)))+
         facet_grid(dataset~.)+
         theme_classic(base_size = 11)+
         theme(panel.border = element_rect(fill=F,colour = 'black',linewidth = 0.8),axis.line = element_blank(),
@@ -415,10 +501,11 @@ fig4b_fTFC1.2_moduleScore = function(){
     
     
     if(!noPlot){
-      p1 = ggplot(dd,aes(annot,fTFC2_combined_UCell,fill=annot))+
+      dd$score = dd$fTFC2_UCell / dd$fTFC1_UCell
+      p1 = ggplot(dd,aes(annot,score,fill=annot))+
         geom_quasirandom(width = 0.2,size=0.25,alpha=0.2,col=grey(0.7))+
         geom_boxplot(outlier.size = 0.01,alpha=0.7,width=0.24)+
-        scale_fill_manual(values = c('orange',grey(0.1)))+
+        scale_fill_manual(values = c('TFC2'='orange','TFC1'=grey(0.1)))+
         #geom_hline(yintercept = 0,linetype='dashed')+
         facet_grid(dataset~.)+
         theme_classic(base_size = 11)+
@@ -432,7 +519,7 @@ fig4b_fTFC1.2_moduleScore = function(){
     print(p1)
   }
   
-  saveFig(file.path(plotDir,'Fig4e_fTFC1.2_combinedModuleScore_fThy_aThy'),plotFun_fTFC1.2_moduleScoreDifference_fThy.aThy,rawData=dd,width = 3,height = 5.6,res = 500,useDingbats = F)
+  saveFig(file.path(plotDir,'Fig4e_fTFC1.2_combinedModuleScore_fThy_aThy'),plotFun_fTFC1.2_moduleScoreDifference_fThy.aThy,rawData=dd,width = 3,height = 5.6,res = 500)
   
 }
 
@@ -467,11 +554,14 @@ moduleList[['fTFC1_combined']] = list('down' = moduleList[['fTFC2']],
 
 ##--- import bulk counts and calculate cpmCnt in xx01_moduleScoring.R
 #bulkRNA = import_bulkRNA_thyroid(bulk_sources = c('TCGA_Thyroid','He2021','inhouse'))
-bulkRNA = import_bulkRNA_thyroid(bulk_sources = c('inhouse'))
+bulkRNA = import_bulkRNA_thyroid(bulk_sources = c('inhouse'='Data/inhouse_bulk/inhouse_bulkRNA_fetalThyroid_paedPTC.RDS',
+                                                  'TCGA_Thyroid'='Data/published_bulkRNAseq/TCGA_Thyroid/TCGA_Thyroid_bulkRNA_se.RDS',
+                                                  'He2021'='Data/published_bulkRNAseq/He_etal_21/aPTC_He_2021_se.RDS',
+                                                  'Lee2024' = 'Data/published_bulkRNAseq/Lee_etal_24/aPTC_Lee_2024_se.RDS'),gene_map = gene_map)
 bulk_samples = bulkRNA[['bulk_samples']]
 cpmCnt = bulkRNA[['cpmCnt']]
-tpmCnt = bulkRNA[['tpmCnt']]
-rawCnt = bulkRNA[['rawCnt']]
+tpmCnt = bulkRNA[['tpm_count']]
+rawCnt = bulkRNA[['raw_count']]
 
 ##---  Score the modules -----##
 
@@ -503,7 +593,7 @@ for(i in 1:length(moduleList)){
 
 table(allScore$moduleType)
 write.csv(allScore,file.path(outDir,'fTFC1.2_top100_geneSignatures_SingScore_bulkRNAseq.csv'))
-
+allScore = read.csv(file.path(outDir,'fTFC1.2_top100_geneSignatures_SingScore_bulkRNAseq.csv'))
 
 
 
@@ -524,7 +614,7 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
   allScore$sampleCol[allScore$source2 == 'scaThy'] = gsub(':.*$','',allScore$sampleID[allScore$source2 == 'scaThy'])
   allScore$source[allScore$source == 'Yoo_2021'] = 'Yoo_2016'
   allScore$source = factor(allScore$source,c('aPTC_Pu21','aPTC_Wang22','aThy_Hong23','aThy_Mosteiro23',
-                                             'GTEx_Thyroid','TCGA_Thyroid','Yoo_2016','He_2021',
+                                             'GTEx_Thyroid','TCGA_Thyroid','Yoo_2016','He_2021','Lee_2024',
                                              'stJudes_Thyroid','Lee_2021','Sanger','scRNAseq_fThy','snRNAseq_Y24.Y46'))
   
   allScore$group_facet_hor = allScore$source
@@ -539,7 +629,7 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     p1 = ggplot(dd, aes(moduleType, TotalScore)) +
       geom_boxplot(aes(fill=group_fill),outlier.colour = 'white',position = 'dodge', alpha = 0.7,width=0.4,linewidth=0.3,fill=grey(0.7)) +
       geom_quasirandom(size=0.4,width = 0.15,alpha=0.6)+
-      scale_y_continuous(breaks = c(0,0.1,0.2,0.3),labels = c(0.0,0.1,0.2,0.3),limits = c(0,0.2))+
+      scale_y_continuous(limits = c(0,0.32))+
       theme_classic()+
       #ggtitle(title)+
       xlab('')+ylab('Module score')+
@@ -552,11 +642,12 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     print(p1)
   }
   
-  saveFig(file.path(plotDir,'Fig4b_fTFC1.2_moduleScore_bulk.Foetal.Samples'),plotFun_sc.fThy.moduleScore_in_Sanger.Fetal.BulkSamples,rawData=dd,width = 1.6,height = 4,res = 500,useDingbats = F)
+  saveFig(file.path(plotDir,'Fig4b_fTFC1.2_moduleScore_bulk.Foetal.Samples'),plotFun_sc.fThy.moduleScore_in_Sanger.Fetal.BulkSamples,rawData=dd,width = 1.6,height = 4,res = 500)
   
+
   
-  
-  plotFun_fTFC2_combined_moduleScore = function(noFrame=FALSE,noPlot=FALSE){
+  moduleType_toUse = c('fTFC1','fTFC2') # not fTFC2_combined
+  plotFun_fTFC_moduleScore = function(noFrame=FALSE,noPlot=FALSE){
     
     allScore$group_facet_ver = allScore$moduleType
     
@@ -564,8 +655,9 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
                     !grepl('follicular|tallCell|Metastatic|Primary',allScore$cancerType) &
                     !grepl('Primary',allScore$cancerType_details) &
                     allScore$source %in% c('Sanger','TCGA_Thyroid',#'Yoo_2016',
-                                           'He_2021') &
-                    allScore$moduleType == 'fTFC2_combined',]
+                                           'He_2021','Lee_2024') &
+                    allScore$moduleType %in% moduleType_toUse,]
+                    #allScore$moduleType %in% c('fTFC1','fTFC2'),]
     
     dd$ageGroup = ifelse(dd$source == 'Sanger',dd$ageCat,'adult')
     dd = dd[dd$ageGroup != 'foetus',]
@@ -574,31 +666,35 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     dd$cancerNormal = factor(dd$cancerNormal,c('Normal','Normal.adj','Tumour'))
     dd$med_normal = NA
     for(dataset in unique(dd$source)){
-      tmp = dd[dd$source == dataset,]
-      med_normal = median(tmp$TotalScore[tmp$cancerNormal == 'Normal'])
-      dd$med_normal[dd$source == dataset] = med_normal
+      for(mod in unique(dd$moduleType)){
+        tmp = dd[dd$source == dataset & dd$moduleType == mod,]
+        med_normal = median(tmp$TotalScore[tmp$cancerNormal == 'Normal'])
+        dd$med_normal[dd$source == dataset & dd$moduleType == mod] = med_normal
+      }
     }
     
     dd$normalised_score = dd$TotalScore - dd$med_normal
-    dd$source = factor(dd$source,c('Sanger','TCGA_Thyroid','He_2021'))
+    dd$source = factor(dd$source,c('Sanger','TCGA_Thyroid','He_2021','Lee_2024'))
     
     table(dd$cancerNormal,dd$cancerNormal,dd$source)
     
     
-    p1 = ggplot(dd, aes(cancerNormal, normalised_score)) +
-      geom_boxplot(aes(fill=cancerNormal),outlier.colour = 'white',position = 'dodge', alpha = 0.7,width=0.5,linewidth=0.3,colour='black') +
-      geom_quasirandom(size=0.4,width = 0.15,alpha=0.6)+
-      scale_fill_manual(values =c(grey(0.8),grey(0.4),'#511378'))+
+    p1 = ggplot(dd[!dd$sampleName %in% sample_metadata$geo_accession[grepl('_P|-P',sample_metadata$title)],], aes(cancerNormal, normalised_score)) +
+      geom_hline(yintercept = 0,linetype=2,linewidth=0.3)+
+      geom_quasirandom(size=0.4,width = 0.15,alpha=0.4)+
+      geom_boxplot(aes(fill=cancerNormal),outlier.colour = 'white',position = 'dodge', alpha = 0.8,width=0.5,linewidth=0.3,colour='black') +
+      #geom_point(data=dd[dd$sampleName %in% sample_metadata$geo_accession[grepl('_P|-P',sample_metadata$title)],],col='red',size=2)+
+      scale_fill_manual(values =c('Normal'=grey(0.8),'Normal.adj'=grey(0.4),'Tumour'='#511378'))+
       #scale_fill_manual(values =c(col25,pal34H))+
       #scale_color_manual(values =c(col25,pal34H))+
-      geom_hline(yintercept = 0)+
+      
       #scale_fill_manual(values = c(rep(col25[4],2),'#c7065a',col25[4],rep(colAlpha(col25[1],0.4),3),rep(grey(0.7),5))) +
       #scale_fill_manual(values = c(rep(col25[4],2),rep(grey(0.7),7))) +
       facet_grid(group_facet_ver~source,scales = 'free',space = 'free_x')+
       theme_classic()+
-      ylim(-0.1,0.1)+
+      #ylim(-0.1,0.1)+
       #ggtitle(title)+
-      xlab('')+ylab('Centralised fTFC2 signature score')+
+      xlab('')+ylab('Centralised fTFC signature score')+
       theme(panel.border = element_rect(fill=F,colour = 'black'),axis.line = element_blank(),
             strip.background=element_rect(linewidth=0),
             axis.text = element_text(colour = 'black'),
@@ -607,8 +703,8 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     
     print(p1)
   }
-  saveFig(file.path(plotDir,'Fig3c_MLDS_moduleScore_bulkSamples'),plotFun_MLDS_moduleScore_inBulkSamples,rawData=allScore,width = 7,height = 5,res = 500,useDingbats = T)
-  saveFig(file.path(plotDir,'Fig3c_fTFC1.2_moduleScore_bulkSamples_sub'),plotFun_fTFC2_combined_moduleScore,rawData=allScore,width = 4.8,height = 4,res = 500,useDingbats = F)
+  
+  saveFig(file.path(plotDir,'Fig4c_fTFC1.2_moduleScore_bulkSamples_sub'),plotFun_fTFC_moduleScore,rawData=allScore,width = 6,height = 7,res = 500)
   
 }
 
@@ -619,12 +715,36 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
 
 
 
+## 2.-- Module score in Microarray data -----
+moduleScore_microarray = read.csv('Results/2505/PTC_bulkRNAseq/published_pPTC_microarray/SingScore_microarray_GSE35570_fTFC1.2_signature.csv',row.names = 1)
+# Remove PTC samples from individuals with age > 16 years old
+moduleScore_microarray$donorID = gsub('normal thyroid-|PTC-radiation exposed-|PTC-radiation not exposed-','',moduleScore_microarray$Title)
+moduleScore_microarray = moduleScore_microarray[!moduleScore_microarray$donorID %in% moduleScore_microarray$donorID[!is.na(moduleScore_microarray$Age) & moduleScore_microarray$Age > 16],]
+moduleScore_microarray$dataset = 'GSE35570'
+norm_medScore = median(moduleScore_microarray$TotalScore[moduleScore_microarray$Radiation == 'normal thyroid' & moduleScore_microarray$moduleType == 'fTFC2'])
+moduleScore_microarray$score = moduleScore_microarray$TotalScore - norm_medScore
+ggplot(moduleScore_microarray[moduleScore_microarray$moduleType == 'fTFC2',],aes(Radiation,score))+
+  geom_boxplot(aes(fill=RET_PTC),outlier.colour = 'white',position = 'dodge', alpha = 1,width=0.5,linewidth=0.3,colour='black')+
+  
+  facet_wrap(vars(moduleType),nrow=1)+
+  theme_classic(base_size = 14)+
+  xlab('')+ylab('fTFC2 signature score')+
+  geom_hline(yintercept = 0)+
+  #scale_fill_manual(values =c('Normal'=grey(0.8),'Tumour'='#511378'))+
+  theme(panel.border = element_rect(fill=F,colour = 'black'),axis.line = element_blank(),
+        strip.background=element_rect(linewidth=0),
+        axis.text = element_text(colour = 'black'),
+        axis.ticks = element_line(colour = 'black'),
+        axis.text.x = element_text(size = 10,angle = 90, vjust = 0.5,hjust = 1,colour = 'black'))
 
 
 
-
-
-
+a = pivot_wider(moduleScore_microarray,id_cols = c('RET_PTC','Radiation','Title'),names_from = 'moduleType',values_from = 'TotalScore')
+a$fTFC2_minus_fTFC1 = a$fTFC2 - a$fTFC1
+ggplot(a,aes(RET_PTC,fTFC2_minus_fTFC1))+
+  geom_boxplot(aes(fill=RET_PTC))+
+  facet_wrap(vars(Radiation),nrow=1)+
+  theme(axis.text.x = element_text(angle = 90,vjust = 0.5,hjust = 1))
 
 
 

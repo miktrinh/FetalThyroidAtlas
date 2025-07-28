@@ -1,5 +1,5 @@
 ## Generate figures for paediatric PTC single-nuclei RNA-seq dataset
-
+setwd('~/FetalThyroidAtlas/')
 plotDir = 'Figures/2505'
 if(!dir.exists(plotDir)){
   dir.create(plotDir,recursive = T)
@@ -24,7 +24,7 @@ source('R/utils/misc.R')
 srat_fp = 'Results/2505/PTC_snRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_annotated_2505.RDS'
 mdat_fp = 'Results/2505/PTC_snRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_annotated_2505_mdat.csv'
 
-srat = readRDS('Results/2505/PTC_snRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_2505.RDS')
+srat = readRDS('Results/2505/PTC_snRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_annotated_2505.RDS')
 
 # SuppFigure A: UMAP of snRNAseq dataset
 suppfig_a_pPTC_snRNAseq_UMAP = function(){
@@ -213,6 +213,19 @@ suppfig_x_pPTC_immune_composition = function(){
 
 
 #####------------------------------------------------------------------------------------------
+markers = c(
+  "TSHR", "NKX2-1", "PAX8", "GLIS3", "TG","SLC26A4","IYD", "HHEX", "FOXE1", "DUOXA1", "DUOXA2", "DUOX1","DUOX2", "SLC5A5", "ZNF804B", 
+  "TPO", "COL23A1", "PPARGC1A", "SLC5A8", "DIO2", "TFF3", 
+  "LRRK2", "HMGA2", "LMO3", "MET", "VAV3", "FN1", "LGALS3", "SERPINA1",  
+  # Endothelium
+  "FLT1", "PLVAP", "MECOM", "VWF","ANO2", "SLCO2A1", "CDH5", "ECSCR", "TBX1", "FLT4", "PROX1", 
+  # Mesenchyme
+  "CDH11","LAMA2", "COL6A3", "PDGFRA", "FBLN1", "BICC1", "MGP", 
+  # Smooth muscle cells
+  "GJC1", "PDGFRB","CLMN", 
+  # Immune cells
+  "MS4A1", "CD3E", "CD8A", "CD14", "TPSAB1", "CPA3", "KIT", "PTPRC"
+)
 
 # SuppFigure X: Dot Plot of canonical markers
 suppfig_x_pPTC_celltype_dotplot = function(){
